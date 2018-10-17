@@ -194,35 +194,54 @@ p.value <- function (model) {
   p <- pf(f[1],f[2],f[3],lower.tail=F)
   return(p)
 }
+# Set alphe value
 alpha = 0.05
+# Empty vectors to contain average treatment effects (ATE)
 treat.effect <- vector()
 sig.treat.effect <- vector()
+# Simulate 1000 times
 for (i in 1:1000) {
+  # Get random number of predictors
   predictors_num <- sample(1:(length(df)-2),1)
+  # Get random predictors
   predictors <- sample(2:(length(df)-1), predictors_num)
+  # Fit the model on a subset of the dataset with just the predictors,
+  # treat (column number 1), and re78 as dependent variable (last column)
   lm.fit <- lm(re78~., data=df[c(1,length(df),predictors)])
-  predictors_val <- vector()
-  for (j in predictors) {
-    predictors_val <- c(predictors_val, median(df[,j]))
+  # Empty vectors to record the predicted re78 for each observation
+  treatment_vector <- vector()
+  control_vector <- vector()
+  # For each observation
+  for (row in 1:nrow(df)) {
+    predictors_val <- vector()
+    # Get the values for the corresponding randomly chosen predictors
+    for (col in predictors) {
+      predictors_val <- c(predictors_val, df[row,col])
+    }
+    treatment_vector[row] <- sum(coef(lm.fit)*c(1,1,predictors_val))
+    control_vector[row] <- sum(coef(lm.fit)*c(1,0,predictors_val))      
   }
-  treatment <- sum(coef(lm.fit)*c(1,1,predictors_val))
-  control <- sum(coef(lm.fit)*c(1,0,predictors_val))
-  treat.effect[i] <- (treatment-control)
+  # Calculate the treatment effects and record the mean  
+  mean_effect <- mean(treatment_vector-control_vector)
+  treat.effect[i] <- mean_effect
+  # If the treatment effect is statistically significant, also record it
+  # in a separate vector
   if (p.value(lm.fit) < alpha){
-    sig.treat.effect <- c(sig.treat.effect, (treatment-control))
+    sig.treat.effect <- c(sig.treat.effect, mean_effect)
   }
 }
-hist(treat.effect, main='Distribution of treatment effects', 
-     xlab='Treatment effect')
-hist(sig.treat.effect, xlab='Treatment effect', cex.main=0.9,
-     main='Distribution of statistically significant treatment effects')
-treat_effect <- data.frame(Treatment_effect=treat.effect)
-sig_effect <- data.frame(Treatment_effect=sig.treat.effect)
+# Plot the histograms
+hist(treat.effect, main='Distribution of average treatment effects (ATE)', 
+     xlab='ATE')
+hist(sig.treat.effect, xlab='ATE', cex.main=0.9,
+     main='Distribution of statistically significant average treatment effects')
+treat_effect <- data.frame(ATE=treat.effect)
+sig_effect <- data.frame(ATE=sig.treat.effect)
 treat_effect$Group <- 'All effects'
 sig_effect$Group <- 'Statistically significant effects'
 # Combine the two dataframes into one.
 plot.data <- rbind(treat_effect, sig_effect)
 # Histogram for control group
-ggplot(plot.data, aes(Treatment_effect, fill = Group)) +
+ggplot(plot.data, aes(ATE, fill = Group)) +
   geom_histogram(alpha = 0.5, position = 'identity', bins=15)+
-  ggtitle("Distribution of treatment effects")
+  ggtitle("Distribution of average treatment effects (ATE)")
